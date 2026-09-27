@@ -1,16 +1,30 @@
 # MysticGSI
 
-Builds a GSI (Generic System Image) from stock Android firmware.
+A tool to build a GSI (Generic System Image) from stock Android firmware.
 
-Supported firmware: full OTA zips (`payload.bin`), fastboot packages and
-`super.img`, sparse images, `system.new.dat`, Samsung tars, Huawei
-`UPDATE.APP`, Unisoc `.pac`, LG `.kdz`, Oppo `.ozip`, QFIL packages, Sony
-`.sin`, and Pixel factory images. Partitions can be ext4, EROFS or F2FS.
+Supported firmware: 
+- full OTA zips (`payload.bin`)  
+- fastboot packages  
+- `super.img`, sparse images  
+- `system.new.dat`  
+- Samsung tars  
+- Huawei `UPDATE.APP`  
+- Unisoc `.pac`  
+- LG `.kdz`  
+- Oppo `.ozip`  
+- QFIL packages  
+- Sony `.sin`  
+- Pixel factory images  
+
+Partitions can be ext4, EROFS or F2FS.
 
 ## Setup
 
-Works on macOS, Ubuntu/Debian, Arch and NixOS. The build requires Python 3.10+.
+This project requires Python 3.10+.
+
 On macOS, install Homebrew and Xcode Command Line Tools first.
+
+### Automatic setup
 
 ```sh
 git clone https://github.com/MysticGSI/mysticgsi.git && cd mysticgsi
@@ -19,12 +33,6 @@ git clone https://github.com/MysticGSI/mysticgsi.git && cd mysticgsi
 
 The script installs the system packages, creates `.venv` and makes sure
 `mke2fs.android` and `e2fsdroid` are available (building them if needed).
-It needs a `python3` to start from; on a minimal Arch install run
-`sudo pacman -S python` first. On NixOS skip it and use `nix develop`, then
-replace `.venv/bin/python` with `python3` in the commands below.
-
-You need erofs-utils 1.5+ for EROFS firmware (Ubuntu 24.04 or newer) and about
-20 GB of free space per build; larger firmware needs more.
 
 ### Manual setup
 
@@ -104,31 +112,35 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ## Usage
 
-By default, builds and rebuilds use AOSP's AVB RSA-2048 test key and a
-SHA-256 hash tree. OpenSSL is required; avbtool and the key are bundled.
-Signing failures preserve the previous image. APK keys are unchanged;
-the signature does not make a locked stock bootloader accept the image.
-
-Use `--avb-key /path/to/key.pem` on `build` or `rebuild` to sign with your own
-unencrypted RSA private key (2048, 4096 or 8192 bits). The SHA-256 signing
-algorithm follows the key size. Omit the option to use AOSP's test key;
-pass it again when rebuilding. Invalid keys fail without falling back.
-
 ```sh
-.venv/bin/python cli.py build <name> <firmware or URL> --type <type> [--compress]
+.venv/bin/python cli.py build <name> <firmware or URL> --type <type> [--compress] [--avb-key /path/to/key.pem] [--add <tag>]
 .venv/bin/python cli.py rebuild <name> [--compress]
 .venv/bin/python cli.py list
 .venv/bin/python cli.py clean
 ```
 
-The image ends up in `out/<name>/`. `--compress` creates a ZIP containing
-`system.img` at its root. `--add <tag>` adds a tag to the build name, and
-`--no-debloat` keeps the apps the ROM's patch set would otherwise remove.
+### Commands
 
-`--type` picks the patch set for the ROM you're porting (`alos`, `hyperos`,
-`coloros`, `oneui`, `pixel`, ...). See `ls patches/<sdk>` for the list.
-Without it only generic patches are applied, unless it's a custom ROM like
-LineageOS.
+```sh
+build - Build a new ROM image
+rebuild - Rebuild an existing ROM image
+list - List all builds
+clean - Clean up all builds
+```
+
+### Command-line options
+
+```sh
+name - Name of the build
+firmware or URL - Path to the firmware or URL to download it from
+--type <type> - Type of the ROM to build (alos, hyperos, coloros, oneui, pixel, ...)
+--compress - Compress the output image into a ZIP
+--add <tag> - Add a tag to the build name
+--no-debloat - Keep the apps the patch set would otherwise remove
+--avb-key /path/to/key.pem - Sign with the specified RSA private key
+```
+
+By default, an image is signed with AOSP's AVB RSA-2048 test key. You can pass `--avb-key /path/to/key.pem` to sign with your own RSA private key.
 
 Example:
 
@@ -137,17 +149,6 @@ Example:
     https://dl.google.com/dl/android/aosp/raven-up1a.231105.003-factory-76a795d5.zip \
     --type pixel --compress
 ```
-
-The build summary says whether the image is 64-bit only or 32/64-bit.
-Builds and rebuilds warn when core executables contain selected SVE/SVE2,
-SME, BF16, I8MM, MOPS, or CSSC instructions. Runtime CPU checks may provide
-fallbacks; no warning does not guarantee compatibility with older CPUs.
-
-To tweak a finished build, edit its system tree in `tmp/<name>/images/system/`
-(delete apps, add files) and run `cli.py rebuild <name>`. The image is
-rebuilt and resized to fit, without redoing the whole build.
-
-`clean` deletes everything under `tmp/` and `out/`.
 
 ## Development
 
@@ -158,9 +159,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 .venv/bin/ruff check .
 ```
 
-Patch files of 50 MiB or more are stored xz-compressed (`<name>.xz`) and unpacked
-during builds. After adding one, run `./tools/assets.py pack` and commit the
-`.xz` files (or `.xz.000`, `.xz.001`, ... for split archives).
+Patch files of 50 MiB or more are stored xz-compressed (`<name>.xz`) and unpacked during builds. After adding one, run `./tools/assets.py pack` and commit the `.xz` files (or `.xz.000`, `.xz.001`, ... for split archives).  
+
 `./tools/assets.py status` shows what's packed.
 
 ## License
