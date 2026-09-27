@@ -1,4 +1,4 @@
-name: MysticGSI Build 2
+name: MysticGSI Build
 
 on:
   workflow_dispatch:
@@ -131,19 +131,14 @@ jobs:
           find firmware_extracted -maxdepth 4 -type f -exec ls -lh {} \;
 
           PAC_FILE=$(find firmware_extracted -type f -iname '*.pac' | head -n1)
-          # Some firmware ships more than one super*.img (e.g. a region/carrier
-          # overlay super alongside the real one). The real super.img is the
-          # one that actually contains system/vendor/product, which in
-          # practice is the largest match, so pick by size instead of the
-          # first path find() happens to return.
-          SUPER_DIRECT=$(find firmware_extracted -type f -iname 'super*.img' -printf '%s %p\n' | sort -rn | head -n1 | cut -d' ' -f2-)
+          SUPER_DIRECT=$(find firmware_extracted -type f -iname 'super*.img' | head -n1)
 
           if [ -n "$PAC_FILE" ]; then
             echo "Found .pac: $PAC_FILE"
             cp "$PAC_FILE" firmware.pac
             echo "needs_pac_extract=true" >> "$GITHUB_ENV"
           elif [ -n "$SUPER_DIRECT" ]; then
-            echo "Found super.img (largest match): $SUPER_DIRECT"
+            echo "Found super.img directly: $SUPER_DIRECT"
             cp "$SUPER_DIRECT" firmware_super.img
             echo "needs_pac_extract=false" >> "$GITHUB_ENV"
           else
@@ -159,7 +154,7 @@ jobs:
           python3 pac-extractor/extractor.py firmware.pac pac_unpacked
           echo "Extracted files:"
           find pac_unpacked -maxdepth 2 -type f -exec ls -lh {} \;
-          SUPER_IMG=$(find pac_unpacked -type f -iname 'super*.img' -printf '%s %p\n' | sort -rn | head -n1 | cut -d' ' -f2-)
+          SUPER_IMG=$(find pac_unpacked -type f -iname 'super*.img' | head -n1)
           if [ -z "$SUPER_IMG" ]; then
             echo "No super.img found after unpacking. Full listing:"
             find pac_unpacked -type f
@@ -187,6 +182,35 @@ jobs:
             xz -9e -T0 -v "$f"
           done
           ls -lh "$OUT_DIR"
+
+      - name: Route oversized builds to gofile.io
+        run: |
+          sudo apt-get install -y jq
+          OUT_DIR="out/${{ github.event.inputs.build_name }}"
+          LIMIT=2147483648  # GitHub's per-asset release limit (2 GiB)
+
+          find "$OUT_DIR" -maxdepth 1 -iname '*.xz' -print0 | while IFS= read -r -d '' f; do
+            SIZE=$(stat -c%s "$f")
+            echo "$f is $SIZE bytes"
+            if [ "$SIZE" -ge "$LIMIT" ]; then
+              echo "Over the GitHub release limit -- uploading to gofile.io instead"
+              SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
+              echo "Using gofile server: $SERVER"
+              RESPONSE=$(curl -s -F "file=@${f}" -F "token=${{ secrets.GOFILE_TOKEN }}" "https://${SERVER}.gofile.io/contents/uploadfile")
+              echo "gofile response: $RESPONSE"
+              LINK=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
+              if [ -z "$LINK" ] || [ "$LINK" = "null" ]; then
+                echo "gofile upload failed, leaving file in place for manual retrieval"
+              else
+                echo "" >> "$OUT_DIR/output.txt"
+                echo "Build too large for a GitHub release asset (${SIZE} bytes)." >> "$OUT_DIR/output.txt"
+                echo "Download from gofile.io instead: $LINK" >> "$OUT_DIR/output.txt"
+                rm -f "$f"
+                echo "Removed $f from the release upload set"
+              fi
+            fi
+          done
+          cat "$OUT_DIR/output.txt" || true
 
       - name: Prepare release tag
         id: tag
