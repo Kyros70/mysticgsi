@@ -87,6 +87,7 @@ def replace_image_size(text, system_size):
 
 patches_dir = "patches"
 tmp_dir = "tmp"
+output_dir = "out"
 
 SDK_MAP = {
     "10": "29",
@@ -343,8 +344,8 @@ class RomPorter:
         self.logger.add(message)
 
     def build(self, filename):
-        if not os.path.exists("tmp"):
-            os.mkdir("tmp")
+        if not os.path.exists(tmp_dir):
+            os.mkdir(tmp_dir)
         if not os.path.exists(self.work_dir):
             os.mkdir(self.work_dir)
 
@@ -903,10 +904,12 @@ class RomPorter:
             self.log(
                 "apktool failed to rebuild services.jar; keeping the stock jar"
             )
-        elif not os.path.exists(f"{out_dir}/dist/services.jar"):
+        elif not os.path.exists(os.path.join(out_dir, "dist", "services.jar")):
             self.log("apktool produced no services.jar; keeping the stock jar")
         else:
-            fsops.copy_file(f"{out_dir}/dist/services.jar", services_path)
+            fsops.copy_file(
+                os.path.join(out_dir, "dist", "services.jar"), services_path
+            )
 
     def _patch_frameworks(self, workdir):
         if self._is_xiaomi_rom():
@@ -2283,7 +2286,7 @@ Architecture: {self._architecture()}
         """
         self._warn_cpu_features()
         system_dir = self.partition_dirs["system"]
-        out_dir = f"out/{self.rom_name}"
+        out_dir = os.path.join(output_dir, self.rom_name)
         # Allocated blocks, not file sizes: small files and directories
         # each take at least a block in the image.
         system_size = int(
@@ -2351,8 +2354,11 @@ Architecture: {self._architecture()}
             self.build_info_text += (
                 f"Raw Image Size: {bytes_to_human(system_size)}\n"
             )
-            with open(f"out/{self.rom_name}/output.txt", "w") as f:
+            with open(
+                os.path.join(output_dir, self.rom_name, "output.txt"), "w"
+            ) as f:
                 f.write(self.build_info_text)
+
         except Exception:
             traceback.print_exc()
             return -1
@@ -2387,7 +2393,9 @@ Architecture: {self._architecture()}
         stale_zip = f"{self.output_path}.zip"
         if os.path.exists(stale_zip):
             os.remove(stale_zip)
-        self._set_recorded_size(f"out/{self.rom_name}/output.txt", system_size)
+        self._set_recorded_size(
+            os.path.join("out", self.rom_name, "output.txt"), system_size
+        )
         self.logger.set_progress(100)
         self.logger.set_state("done")
         return system_size
