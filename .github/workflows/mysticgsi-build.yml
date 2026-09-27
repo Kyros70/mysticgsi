@@ -130,8 +130,8 @@ jobs:
           echo "Extracted contents:"
           find firmware_extracted -maxdepth 4 -type f -exec ls -lh {} \;
 
-          PAC_FILE=$(find firmware_extracted -iname '*.pac' | head -n1)
-          SUPER_DIRECT=$(find firmware_extracted -iname 'super*.img' | head -n1)
+          PAC_FILE=$(find firmware_extracted -type f -iname '*.pac' | head -n1)
+          SUPER_DIRECT=$(find firmware_extracted -type f -iname 'super*.img' | head -n1)
 
           if [ -n "$PAC_FILE" ]; then
             echo "Found .pac: $PAC_FILE"
@@ -154,7 +154,7 @@ jobs:
           python3 pac-extractor/extractor.py firmware.pac pac_unpacked
           echo "Extracted files:"
           find pac_unpacked -maxdepth 2 -type f -exec ls -lh {} \;
-          SUPER_IMG=$(find pac_unpacked -iname 'super*.img' | head -n1)
+          SUPER_IMG=$(find pac_unpacked -type f -iname 'super*.img' | head -n1)
           if [ -z "$SUPER_IMG" ]; then
             echo "No super.img found after unpacking. Full listing:"
             find pac_unpacked -type f
@@ -198,4 +198,3 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
