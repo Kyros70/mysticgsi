@@ -73,10 +73,6 @@ jobs:
               fi
               .venv/bin/python -m gdown "$URL" -O dl/firmware.zip
               ;;
-            *drive.usercontent.google.com*)
-              echo "Detected: Google Drive direct link"
-              aria2c -d dl -o firmware.zip -x4 -s4 "$URL"
-              ;;
             *mega.nz*|*mega.co.nz*)
               echo "Detected: Mega.nz"
               sudo apt-get install -y megatools
