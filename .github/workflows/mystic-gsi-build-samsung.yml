@@ -64,14 +64,18 @@ jobs:
           mkdir -p dl
           echo "URL: $URL"
           case "$URL" in
-            *drive.google.com*)
-              echo "Detected: Google Drive"
+            *drive.google.com/file*)
+              echo "Detected: Google Drive share link"
               .venv/bin/python -m pip install -q gdown
               mkdir -p ~/.cache/gdown
               if [ -n "${{ secrets.GDRIVE_COOKIES }}" ]; then
                 echo "${{ secrets.GDRIVE_COOKIES }}" > ~/.cache/gdown/cookies.txt
               fi
               .venv/bin/python -m gdown "$URL" -O dl/firmware.zip
+              ;;
+            *drive.usercontent.google.com*)
+              echo "Detected: Google Drive direct link"
+              aria2c -d dl -o firmware.zip -x4 -s4 "$URL"
               ;;
             *mega.nz*|*mega.co.nz*)
               echo "Detected: Mega.nz"
@@ -85,6 +89,11 @@ jobs:
           esac
           echo "Downloaded contents:"
           find dl -maxdepth 1 -type f -exec ls -lh {} \;
+          SIZE=$(stat -c%s dl/firmware.zip)
+          if [ "$SIZE" -lt 1048576 ]; then
+            echo "Download too small ($SIZE bytes) — likely an HTML error page. Check the URL and sharing settings."
+            exit 1
+          fi
 
       - name: Extract Samsung firmware and locate AP tar
         run: |
@@ -115,10 +124,6 @@ jobs:
               sudo apt-get install -y p7zip-full
               7z x "$DL_FILE" -ofirmware_extracted
               ;;
-            # Firmware was already a tar — use it directly
-            *POSIX tar*|*tar archive*)
-              cp "$DL_FILE" firmware_extracted/AP_firmware.tar
-              ;;
             *)
               cp "$DL_FILE" firmware_extracted/
               ;;
@@ -127,10 +132,7 @@ jobs:
           echo "Extracted contents:"
           find firmware_extracted -maxdepth 2 -type f -exec ls -lh {} \;
 
-          # AP tar contains system/vendor — it's what MysticGSI needs.
-          # Samsung ships it as AP_*.tar.md5 or AP_*.tar.
           AP_TAR=$(find firmware_extracted -type f \( -iname 'AP_*.tar.md5' -o -iname 'AP_*.tar' \) | head -n1)
-
           if [ -z "$AP_TAR" ]; then
             echo "No AP tar found. Full listing:"
             find firmware_extracted -type f
