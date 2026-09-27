@@ -76,7 +76,7 @@ jobs:
               if [ -n "${{ secrets.GDRIVE_COOKIES }}" ]; then
                 echo "${{ secrets.GDRIVE_COOKIES }}" > ~/.cache/gdown/cookies.txt
               fi
-              .venv/bin/python -m gdown --fuzzy "$URL" -O dl/firmware.bin
+              .venv/bin/python -m gdown "$URL" -O dl/firmware.bin
               ;;
             *mega.nz*|*mega.co.nz*)
               echo "Detected: Mega.nz"
@@ -198,3 +198,4 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
