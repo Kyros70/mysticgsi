@@ -186,7 +186,7 @@ jobs:
           done
           ls -lh "$OUT_DIR"
 
-      - name: Route oversized builds to gofile.io
+      - name: Upload build to gofile.io
         run: |
           sudo apt-get install -y jq
           OUT_DIR="out/${{ github.event.inputs.build_name }}"
@@ -194,26 +194,23 @@ jobs:
 
           find "$OUT_DIR" -maxdepth 1 -iname '*.xz' -print0 | while IFS= read -r -d '' f; do
             SIZE=$(stat -c%s "$f")
-            echo "$f is $SIZE bytes"
+            echo "$f is $SIZE bytes -- uploading to gofile.io"
+            SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
+            echo "Using gofile server: $SERVER"
+            RESPONSE=$(curl -s -F "file=@${f}" -F "token=${{ secrets.GOFILE_TOKEN }}" "https://${SERVER}.gofile.io/contents/uploadfile")
+            echo "gofile response: $RESPONSE"
+            LINK=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
+            if [ -z "$LINK" ] || [ "$LINK" = "null" ]; then
+              echo "gofile upload failed"
+            else
+              echo "" >> "$OUT_DIR/output.txt"
+              echo "gofile.io mirror: $LINK" >> "$OUT_DIR/output.txt"
+            fi
             if [ "$SIZE" -ge "$LIMIT" ]; then
-              echo "Over the GitHub release limit -- uploading to gofile.io instead"
-              SERVER=$(curl -s https://api.gofile.io/servers | jq -r '.data.servers[0].name')
-              echo "Using gofile server: $SERVER"
-              RESPONSE=$(curl -s -F "file=@${f}" -F "token=${{ secrets.GOFILE_TOKEN }}" "https://${SERVER}.gofile.io/contents/uploadfile")
-              echo "gofile response: $RESPONSE"
-              LINK=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
-              if [ -z "$LINK" ] || [ "$LINK" = "null" ]; then
-                echo "gofile upload failed, leaving file in place for manual retrieval"
-              else
-                echo "" >> "$OUT_DIR/output.txt"
-                echo "Build too large for a GitHub release asset (${SIZE} bytes)." >> "$OUT_DIR/output.txt"
-                echo "Download from gofile.io instead: $LINK" >> "$OUT_DIR/output.txt"
-                rm -f "$f"
-                echo "Removed $f from the release upload set"
-              fi
+              echo "Over the GitHub release limit -- removing from the release upload set"
+              rm -f "$f"
             fi
           done
-          cat "$OUT_DIR/output.txt" || true
 
       - name: Prepare release tag
         id: tag
@@ -224,6 +221,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ github.event.inputs.build_name }}
+          body_path: out/${{ github.event.inputs.build_name }}/output.txt
           files: |
             out/${{ github.event.inputs.build_name }}/*.xz
           generate_release_notes: false
