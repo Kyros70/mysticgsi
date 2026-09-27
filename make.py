@@ -2185,7 +2185,7 @@ Architecture: {self._architecture()}
         placements = {}
 
         for i in self.image_files:
-            if i in ("system", "vendor", "odm"):
+            if i in ("system", "vendor", "odm", "vendor_dlkm", "odm_dlkm"):
                 continue
             if i == "mi_ext" and self.rom_type != "hyperos":
                 continue
