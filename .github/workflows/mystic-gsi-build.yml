@@ -90,7 +90,7 @@ jobs:
               ;;
             *pixeldrain.com*)
               echo "Detected: Pixeldrain"
-              PD_ID=$(echo "$URL" | grep -oP 'pixeldrain\.com/u/\K[A-Za-z0-9]+')
+              PD_ID=$(echo "$URL" | grep -oP 'pixeldrain\.com/u/\K[A-Za-z0-9]+' || true)
               if [ -n "$PD_ID" ]; then
                 DIRECT_URL="https://pixeldrain.com/api/file/${PD_ID}?download"
                 echo "Converted share link to direct: $DIRECT_URL"
@@ -257,3 +257,4 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
