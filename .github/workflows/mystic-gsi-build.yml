@@ -6,9 +6,9 @@ on:
       build_name:
         description: 'Name for the build (out/<name>/)'
         required: true
-        default: 'devicename-gsi'
+        default: ''
       firmware_url:
-        description: 'Firmware URL (Google Drive, Mega.nz, or direct link)'
+        description: 'Firmware URL (Google Drive, Mega.nz, Pixeldrain, or direct link)'
         required: true
         default: ''
       rom_type:
@@ -81,7 +81,27 @@ jobs:
             *mega.nz*|*mega.co.nz*)
               echo "Detected: Mega.nz"
               sudo apt-get install -y megatools
+              if [ -n "${{ secrets.MEGA_EMAIL }}" ] && [ -n "${{ secrets.MEGA_PASSWORD }}" ]; then
+                echo "Logging in with Mega account to avoid anonymous-download throttling"
+                cat > ~/.megarc << MEGARC
+[Login]
+Username = ${{ secrets.MEGA_EMAIL }}
+Password = ${{ secrets.MEGA_PASSWORD }}
+MEGARC
+              fi
               megadl --path dl "$URL"
+              ;;
+            *pixeldrain.com*)
+              echo "Detected: Pixeldrain"
+              PD_ID=$(echo "$URL" | grep -oP 'pixeldrain\.com/u/\K[A-Za-z0-9]+')
+              if [ -n "$PD_ID" ]; then
+                DIRECT_URL="https://pixeldrain.com/api/file/${PD_ID}?download"
+                echo "Converted share link to direct: $DIRECT_URL"
+              else
+                DIRECT_URL="$URL"
+                echo "Already a direct/API link, using as-is"
+              fi
+              aria2c -d dl -o firmware.bin -x4 -s4 "$DIRECT_URL"
               ;;
             *)
               echo "Detected: direct link"
@@ -91,7 +111,7 @@ jobs:
           echo "Downloaded contents:"
           find dl -maxdepth 1 -type f -exec ls -lh {} \;
 
-      - name: Extract firmware and locate super.img
+      - name: Extract firmware and identify build input
         run: |
           DL_FILE=$(find dl -maxdepth 1 -type f | head -n1)
           if [ -z "$DL_FILE" ]; then
@@ -130,28 +150,35 @@ jobs:
           echo "Extracted contents:"
           find firmware_extracted -maxdepth 4 -type f -exec ls -lh {} \;
 
+          PAYLOAD_FILE=$(find firmware_extracted -type f -iname 'payload.bin' | head -n1)
           PAC_FILE=$(find firmware_extracted -type f -iname '*.pac' | head -n1)
           # Some firmware (e.g. loose SPD "flash file" dumps) names the
           # dynamic-partition image super.bin instead of super.img, so match
           # both, and pick the largest match by size to avoid a decoy file.
           SUPER_DIRECT=$(find firmware_extracted -type f \( -iname 'super*.img' -o -iname 'super*.bin' \) -printf '%s %p\n' | sort -rn | head -n1 | cut -d' ' -f2-)
 
-          if [ -n "$PAC_FILE" ]; then
+          if [ -n "$PAYLOAD_FILE" ]; then
+            # MysticGSI natively supports full OTA zips containing payload.bin --
+            # hand it the original downloaded zip rather than the loose payload.bin.
+            echo "Found payload.bin OTA package: $PAYLOAD_FILE"
+            cp "$DL_FILE" firmware_input.zip
+            echo "firmware_mode=payload" >> "$GITHUB_ENV"
+          elif [ -n "$PAC_FILE" ]; then
             echo "Found .pac: $PAC_FILE"
             cp "$PAC_FILE" firmware.pac
-            echo "needs_pac_extract=true" >> "$GITHUB_ENV"
+            echo "firmware_mode=pac" >> "$GITHUB_ENV"
           elif [ -n "$SUPER_DIRECT" ]; then
             echo "Found super.img directly: $SUPER_DIRECT"
             cp "$SUPER_DIRECT" firmware_super.img
-            echo "needs_pac_extract=false" >> "$GITHUB_ENV"
+            echo "firmware_mode=super" >> "$GITHUB_ENV"
           else
-            echo "No .pac or super.img found. Full listing:"
+            echo "No payload.bin, .pac, or super.img found. Full listing:"
             find firmware_extracted -type f
             exit 1
           fi
 
       - name: Unpack super.img from the .pac
-        if: env.needs_pac_extract == 'true'
+        if: env.firmware_mode == 'pac'
         run: |
           git clone --depth 1 https://github.com/bismoy-bot/PAC-Extractor.git pac-extractor
           python3 pac-extractor/extractor.py firmware.pac pac_unpacked
@@ -172,8 +199,14 @@ jobs:
           if [ -n "${{ github.event.inputs.rom_type }}" ]; then
             TYPE_ARG="--type ${{ github.event.inputs.rom_type }}"
           fi
+          if [ "$firmware_mode" = "payload" ]; then
+            FIRMWARE_INPUT=firmware_input.zip
+          else
+            FIRMWARE_INPUT=firmware_super.img
+          fi
+          echo "Building from: $FIRMWARE_INPUT (mode: $firmware_mode)"
           .venv/bin/python cli.py build "${{ github.event.inputs.build_name }}" \
-            firmware_super.img $TYPE_ARG
+            "$FIRMWARE_INPUT" $TYPE_ARG
 
       - name: Compress output with xz -9e
         run: |
@@ -227,3 +260,4 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
