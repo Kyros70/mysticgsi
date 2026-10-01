@@ -149,6 +149,7 @@ jobs:
 
           PAYLOAD_FILE=$(find firmware_extracted -type f -iname 'payload.bin' | head -n1)
           PAC_FILE=$(find firmware_extracted -type f -iname '*.pac' | head -n1)
+          AP_TAR=$(find firmware_extracted -type f -iname 'AP_*.tar.md5' | head -n1)
           # Some firmware (e.g. loose SPD "flash file" dumps) names the
           # dynamic-partition image super.bin instead of super.img, so match
           # both, and pick the largest match by size to avoid a decoy file.
@@ -161,34 +162,37 @@ jobs:
             cp "$DL_FILE" firmware_input.zip
             echo "firmware_mode=payload" >> "$GITHUB_ENV"
           elif [ -n "$PAC_FILE" ]; then
-            echo "Found .pac: $PAC_FILE"
+            echo "Found .pac: $PAC_FILE -- unpacking super.img from it"
             cp "$PAC_FILE" firmware.pac
-            echo "firmware_mode=pac" >> "$GITHUB_ENV"
+            git clone --depth 1 https://github.com/bismoy-bot/PAC-Extractor.git pac-extractor
+            python3 pac-extractor/extractor.py firmware.pac pac_unpacked
+            echo "PAC-extracted files:"
+            find pac_unpacked -maxdepth 2 -type f -exec ls -lh {} \;
+            SUPER_IMG=$(find pac_unpacked -type f \( -iname 'super*.img' -o -iname 'super*.bin' \) | head -n1)
+            if [ -z "$SUPER_IMG" ]; then
+              echo "No super.img found after unpacking the .pac. Full listing:"
+              find pac_unpacked -type f
+              exit 1
+            fi
+            echo "Found: $SUPER_IMG"
+            cp "$SUPER_IMG" firmware_super.img
+            echo "firmware_mode=super" >> "$GITHUB_ENV"
+          elif [ -n "$AP_TAR" ]; then
+            # Samsung's AP tar ships with a .md5 checksum suffix appended to
+            # the filename; stripping it gives a normal .tar that MysticGSI
+            # reads natively as a Samsung firmware source.
+            echo "Found Samsung AP tar: $AP_TAR"
+            cp "$AP_TAR" firmware_ap.tar
+            echo "firmware_mode=samsung" >> "$GITHUB_ENV"
           elif [ -n "$SUPER_DIRECT" ]; then
             echo "Found super.img directly: $SUPER_DIRECT"
             cp "$SUPER_DIRECT" firmware_super.img
             echo "firmware_mode=super" >> "$GITHUB_ENV"
           else
-            echo "No payload.bin, .pac, or super.img found. Full listing:"
+            echo "No payload.bin, .pac, Samsung AP tar, or super.img found. Full listing:"
             find firmware_extracted -type f
             exit 1
           fi
-
-      - name: Unpack super.img from the .pac
-        if: env.firmware_mode == 'pac'
-        run: |
-          git clone --depth 1 https://github.com/bismoy-bot/PAC-Extractor.git pac-extractor
-          python3 pac-extractor/extractor.py firmware.pac pac_unpacked
-          echo "Extracted files:"
-          find pac_unpacked -maxdepth 2 -type f -exec ls -lh {} \;
-          SUPER_IMG=$(find pac_unpacked -type f \( -iname 'super*.img' -o -iname 'super*.bin' \) | head -n1)
-          if [ -z "$SUPER_IMG" ]; then
-            echo "No super.img found after unpacking. Full listing:"
-            find pac_unpacked -type f
-            exit 1
-          fi
-          echo "Found: $SUPER_IMG"
-          cp "$SUPER_IMG" firmware_super.img
 
       - name: Build GSI
         run: |
@@ -196,11 +200,17 @@ jobs:
           if [ -n "${{ github.event.inputs.rom_type }}" ]; then
             TYPE_ARG="--type ${{ github.event.inputs.rom_type }}"
           fi
-          if [ "$firmware_mode" = "payload" ]; then
-            FIRMWARE_INPUT=firmware_input.zip
-          else
-            FIRMWARE_INPUT=firmware_super.img
-          fi
+          case "$firmware_mode" in
+            payload)
+              FIRMWARE_INPUT=firmware_input.zip
+              ;;
+            samsung)
+              FIRMWARE_INPUT=firmware_ap.tar
+              ;;
+            *)
+              FIRMWARE_INPUT=firmware_super.img
+              ;;
+          esac
           echo "Building from: $FIRMWARE_INPUT (mode: $firmware_mode)"
           .venv/bin/python cli.py build "${{ github.event.inputs.build_name }}" \
             "$FIRMWARE_INPUT" $TYPE_ARG
@@ -257,4 +267,3 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
