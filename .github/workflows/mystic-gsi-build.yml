@@ -83,11 +83,8 @@ jobs:
               sudo apt-get install -y megatools
               if [ -n "${{ secrets.MEGA_EMAIL }}" ] && [ -n "${{ secrets.MEGA_PASSWORD }}" ]; then
                 echo "Logging in with Mega account to avoid anonymous-download throttling"
-                cat > ~/.megarc << MEGARC
-[Login]
-Username = ${{ secrets.MEGA_EMAIL }}
-Password = ${{ secrets.MEGA_PASSWORD }}
-MEGARC
+                printf '[Login]\nUsername = %s\nPassword = %s\n' \
+                  "${{ secrets.MEGA_EMAIL }}" "${{ secrets.MEGA_PASSWORD }}" > ~/.megarc
               fi
               megadl --path dl "$URL"
               ;;
@@ -260,4 +257,3 @@ MEGARC
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
