@@ -43,6 +43,7 @@ venv
 /patches/vndk/33/apex/com.android.vndk.v30.apex
 /patches/vndk/34/apex/com.android.vndk.v30.apex
 /patches/vndk/35/apex/com.android.vndk.v30.apex
+/patches/vndk/36/apex/com.android.vndk.v30.apex
 /patches/vndk/Baklava/apex/com.android.vndk.v30.apex
 /patches/vndk/UpsideDownCake/apex/com.android.vndk.v30.apex
 /patches/vndk/VanillaIceCream/apex/com.android.vndk.v30.apex
