@@ -15,6 +15,7 @@ import buildlock
 import fsops
 import make
 import tools
+from tools.host import configure_environment
 from tools.image.signing import signing_parameters
 
 GSILIST = "tmp/gsilist.json"
@@ -279,7 +280,10 @@ def avb_key_path(value):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="CLI entry point for mysticgsi builds.")
+    configure_environment()
+    ap = argparse.ArgumentParser(
+        description="CLI entry point for mysticgsi builds."
+    )
     sub = ap.add_subparsers(dest="command", required=True)
 
     build = sub.add_parser("build", help="build a GSI from a URL or a local file")

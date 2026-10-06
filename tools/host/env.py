@@ -2,6 +2,7 @@ import os
 import platform
 import shutil
 import subprocess
+import sys
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BIN_ROOT = os.path.join(REPO_ROOT, "tools", "bin")
@@ -30,13 +31,22 @@ def _brew_paths() -> list[str]:
     ]
 
 
+def _configure_windows_output() -> None:
+    os.environ["PYTHONIOENCODING"] = "utf-8:backslashreplace"
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def configure_environment() -> None:
-    """Put bundled and platform tools before the existing PATH."""
+    """Configure native tool paths and Windows UTF-8 output."""
     system = platform.system()
     paths = [os.path.join(BIN_ROOT, system, platform.machine()), BIN_ROOT]
     if system == "Darwin":
         paths.extend(_brew_paths())
     elif system == "Windows":
+        _configure_windows_output()
         paths.extend(
             [
                 r"C:\Program Files\Git\usr\bin",
