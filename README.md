@@ -22,32 +22,51 @@ Partitions can be ext4, EROFS or F2FS.
 
 This project requires Python 3.10+.
 
-On macOS, install Homebrew and Xcode Command Line Tools first.
-
 ### Automatic setup
+
+#### macOS / Linux
+
+On macOS, install Homebrew and Xcode Command Line Tools first.
 
 ```sh
 git clone https://github.com/MysticGSI/mysticgsi.git && cd mysticgsi
-./setup_host.py     # --dev also installs pytest and Ruff
+./setup_host.py
 ```
 
-The script installs the system packages, creates `.venv` and makes sure
-`mke2fs.android` and `e2fsdroid` are available (building them if needed).
+#### Windows
+
+Install Python 3 and Git if you haven't already. Make sure both are added to PATH.
+We recommend using WinGet:
+
+```cmd
+winget install --id Python.Python.3.14 --exact --source winget
+winget install --id Git.Git --exact --source winget
+```
+
+```cmd
+git clone https://github.com/MysticGSI/mysticgsi.git && cd mysticgsi
+python setup_host.py
+```
+
+On macOS, Debian/Ubuntu, Arch and Windows, the script installs system packages and
+creates `.venv`. On NixOS, it checks the development shell. Native image
+tools and the Apktool JAR are bundled with the repository.
 
 ### Manual setup
 
 Swap `requirements.txt` for `requirements-dev.txt` if you want the dev tools.
+The bundled Apktool JAR needs Java; native image tools are under
+`tools/bin/<platform>/<architecture>`.
 
 <details>
 <summary>macOS</summary>
 
 ```sh
 xcode-select --install
-brew install python@3.13 cmake ninja pkgconf erofs-utils brotli lz4 \
-    pcre2 libusb zstd protobuf aria2 apktool gpatch openssl@3
+brew install python@3.13 curl aria2 gpatch openssl@3 openjdk@17
+export PATH="$(brew --prefix openjdk@17)/bin:$PATH"
 "$(brew --prefix python@3.13)/bin/python3.13" -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python tools/build_android_tools.py
 ```
 
 </details>
@@ -56,17 +75,12 @@ brew install python@3.13 cmake ninja pkgconf erofs-utils brotli lz4 \
 <summary>Ubuntu / Debian</summary>
 
 ```sh
-sudo apt-get install python3 python3-venv erofs-utils aria2 patch \
-    default-jre-headless curl build-essential cmake ninja-build pkg-config \
-    perl golang-go libgtest-dev libusb-1.0-0-dev libpcre2-dev \
-    libprotobuf-dev protobuf-compiler libbrotli-dev liblz4-dev libzstd-dev \
-    libarchive-tools openssl
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip curl aria2 \
+    openssl patch ca-certificates libarchive-tools default-jre-headless
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python tools/build_android_tools.py
 ```
-
-Then install [apktool](#apktool-on-linux).
 
 </details>
 
@@ -74,14 +88,11 @@ Then install [apktool](#apktool-on-linux).
 <summary>Arch</summary>
 
 ```sh
-sudo pacman -Syu --needed python erofs-utils aria2 patch \
-    jre-openjdk-headless android-tools curl openssl
+sudo pacman -Syu --needed python python-pip curl aria2 openssl patch \
+    libarchive jre17-openjdk-headless
 python -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
-
-Then install [apktool](#apktool-on-linux), or `android-apktool-bin` from the AUR
-(it needs `jre-openjdk` in place of `jre-openjdk-headless`).
 
 </details>
 
@@ -89,26 +100,26 @@ Then install [apktool](#apktool-on-linux), or `android-apktool-bin` from the AUR
 <summary>NixOS</summary>
 
 ```sh
-nix develop
+nix --extra-experimental-features 'nix-command flakes' develop
 python3 cli.py build <name> <firmware> --type <type>
 ```
 
 </details>
 
-#### apktool on Linux
+<details>
+<summary>Windows</summary>
 
-Grab the latest `apktool_<version>.jar` from the
-[releases](https://github.com/iBotPeaches/Apktool/releases):
-
-```sh
-mkdir -p ~/.local/bin
-curl -fL -o ~/.local/bin/apktool.jar \
-    https://github.com/iBotPeaches/Apktool/releases/download/v<version>/apktool_<version>.jar
-printf '#!/bin/sh\nexec java -jar "$HOME/.local/bin/apktool.jar" "$@"\n' \
-    > ~/.local/bin/apktool
-chmod +x ~/.local/bin/apktool
-export PATH="$HOME/.local/bin:$PATH"
+```cmd
+winget install --id 7zip.7zip --exact --source winget
+winget install --id aria2.aria2 --exact --source winget
+winget install --id EclipseAdoptium.Temurin.26.JDK --exact --source winget
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
+
+</details>
+
+
 
 ## Usage
 
@@ -118,6 +129,15 @@ export PATH="$HOME/.local/bin:$PATH"
 .venv/bin/python cli.py list
 .venv/bin/python cli.py clean
 ```
+
+On Windows, run from the repository root:
+
+```cmd
+.venv\Scripts\python.exe cli.py build test D:\path\to\firmware.tar
+```
+
+F2FS extraction on Windows needs a local NTFS working directory that allows
+case sensitivity. Use an up-to-date Python for Windows directory permissions.
 
 ### Commands
 
@@ -155,7 +175,6 @@ Example:
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ```sh
-.venv/bin/python -m pytest tests -q
 .venv/bin/ruff check .
 ```
 

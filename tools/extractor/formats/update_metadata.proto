@@ -14,6 +14,7 @@
 
 // Subset of AOSP system/update_engine/update_metadata.proto: only what full
 // payload extraction reads. Field and enum numbers must match upstream.
+// Use protoc 21.0 to support the minimum protobuf runtime (4.21.0).
 // Regenerate with: protoc --python_out=. update_metadata.proto
 
 syntax = "proto2";

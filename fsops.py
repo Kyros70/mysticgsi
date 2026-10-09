@@ -4,6 +4,8 @@ import re
 import shutil
 import subprocess
 
+from tools.host import posix
+
 CHUNK = 1024 * 1024
 BLOCK = 4096
 
@@ -34,7 +36,7 @@ def disk_usage(path):
     except OSError:
         return 0
     total = _allocated(st)
-    if not os.path.isdir(path) or os.path.islink(path):
+    if not os.path.isdir(path) or islink(path):
         return total
 
     seen = set()
@@ -126,13 +128,17 @@ def expand(pattern):
     return [str(pattern)]
 
 
+def _remove(path, *, ignore_errors=False):
+    if os.path.isdir(path) and not islink(path):
+        shutil.rmtree(path, ignore_errors=ignore_errors)
+    elif os.path.lexists(path):
+        os.remove(path)
+
+
 def rmrf(path):
     for p in expand(path):
         try:
-            if os.path.isdir(p) and not os.path.islink(p):
-                shutil.rmtree(p, ignore_errors=True)
-            elif os.path.lexists(p):
-                os.remove(p)
+            _remove(p, ignore_errors=True)
         except OSError:
             pass
 
@@ -150,7 +156,23 @@ def touch(path):
 def symlink(target, link):
     mkdirp(os.path.dirname(link))
     if not os.path.lexists(link):
-        os.symlink(target, link)
+        posix.symlink(os.fsdecode(target), os.path.abspath(os.fsdecode(link)))
+
+
+def readlink(path):
+    if os.path.islink(path):
+        return os.readlink(path)
+    if os.name == "nt" and os.path.isfile(path):
+        return posix.readlink(path)
+    return ""
+
+
+def islink(path):
+    if os.path.islink(path):
+        return True
+    if os.name == "nt" and os.path.isfile(path):
+        return bool(posix.readlink(path))
+    return False
 
 
 def _target(src, dst):
@@ -165,38 +187,40 @@ def copy_file(src, dst):
     mkdirp(os.path.dirname(dst) if not os.path.isdir(dst) else dst)
     target = _target(src, dst)
     if os.path.lexists(target):
-        rmrf(target)
+        _remove(target)
     shutil.copy2(src, target, follow_symlinks=False)
     return True
 
 
-def cp_r(src, dst, *, clobber=True):
-    for s in expand(src):
-        if not os.path.lexists(s):
-            continue
-        target = _target(s, dst)
-        if not clobber and os.path.lexists(target):
-            if (
-                os.path.isdir(s)
-                and not os.path.islink(s)
-                and os.path.isdir(target)
-                and not os.path.islink(target)
-            ):
-                for name in os.listdir(s):
-                    cp_r(os.path.join(s, name), target, clobber=False)
-            continue
-        if os.path.islink(s):
-            if os.path.lexists(target):
-                rmrf(target)
-            mkdirp(os.path.dirname(target))
-            os.symlink(os.readlink(s), target)
-        elif os.path.isdir(s):
-            shutil.copytree(s, target, symlinks=True, dirs_exist_ok=clobber)
+def cp_r(src, dst, *, clobber=True, exclude=None):
+    def copy(source, target):
+        if exclude and exclude(os.path.basename(source)):
+            return
+        if not os.path.lexists(source):
+            return
+        link = readlink(source)
+        directory = not link and os.path.isdir(source)
+        exists = os.path.lexists(target)
+        merge = directory and os.path.isdir(target) and not islink(target)
+        if exists and not clobber and not merge:
+            return
+        if exists and not merge:
+            _remove(target)
+        if directory:
+            mkdirp(target)
+            for name in os.listdir(source):
+                copy(os.path.join(source, name), os.path.join(target, name))
+            if clobber or not exists:
+                shutil.copystat(source, target)
         else:
             mkdirp(os.path.dirname(target))
-            if os.path.lexists(target):
-                rmrf(target)
-            shutil.copy2(s, target, follow_symlinks=False)
+            if link:
+                symlink(link, target)
+            else:
+                shutil.copy2(source, target, follow_symlinks=False)
+
+    for source in expand(src):
+        copy(source, _target(source, dst))
 
 
 def copy_into(src_dir, dst_dir, *, clobber=True):
@@ -210,6 +234,6 @@ def move(src, dst):
             continue
         target = _target(s, dst)
         if os.path.lexists(target):
-            rmrf(target)
+            _remove(target)
         mkdirp(os.path.dirname(target))
         shutil.move(s, target)

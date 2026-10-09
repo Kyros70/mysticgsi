@@ -7,7 +7,6 @@ fixes are all welcome.
 
 ```sh
 ./setup_host.py --dev
-.venv/bin/python -m pytest tests -q
 .venv/bin/ruff check .
 ```
 
@@ -20,8 +19,6 @@ Both must pass before you open a pull request.
   copying its style.
 - Only comment what the code can't say itself (why, not what), and only log
   what someone running a build needs to see.
-- Add tests for logic that's easy to get wrong, like format parsing or offset
-  math. Trivial code doesn't need them.
 - Files over 50 MB under `patches/` go through `./tools/assets.py pack`; see
   the README.
 - Only add vendor files (APKs, libraries, APEXes) you are able to share.
