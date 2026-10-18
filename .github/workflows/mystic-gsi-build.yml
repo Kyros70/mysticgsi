@@ -51,7 +51,7 @@ jobs:
       - name: Install apktool
         run: |
           mkdir -p ~/.local/bin
-          ver=$(curl -fsSL https://api.github.com/repos/iBotPeaches/Apktool/releases/latest | grep -oP '"tag_name": "v\K[^"]+')
+          ver=$(curl -fsSL --retry 3 -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/iBotPeaches/Apktool/releases/latest | grep -oP '"tag_name": "v\K[^"]+')
           curl -fL -o ~/.local/bin/apktool.jar \
             "https://github.com/iBotPeaches/Apktool/releases/download/v${ver}/apktool_${ver}.jar"
           printf '#!/bin/sh\nexec java -jar "$HOME/.local/bin/apktool.jar" "$@"\n' > ~/.local/bin/apktool
