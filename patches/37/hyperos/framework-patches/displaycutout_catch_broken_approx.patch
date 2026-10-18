@@ -1,0 +1,74 @@
+--- smali_classes4/android/view/DisplayCutout.smali
++++ smali_classes4/android/view/DisplayCutout.smali
+@@ -1015,6 +1015,7 @@
+ .method public static blacklist fromResourcesRectApproximation(Landroid/content/res/Resources;Ljava/lang/String;IIII)Landroid/view/DisplayCutout;
+     .locals 9
+ 
++    :try_start_0
+     invoke-static {p0, p1}, Landroid/view/DisplayCutout;->getDisplayCutoutPath(Landroid/content/res/Resources;Ljava/lang/String;)Ljava/lang/String;
+ 
+     move-result-object v0
+@@ -1049,13 +1050,59 @@
+ 
+     invoke-static/range {v0 .. v8}, Landroid/view/DisplayCutout;->pathAndDisplayCutoutFromSpec(Ljava/lang/String;Ljava/lang/String;IIIIFLandroid/graphics/Insets;[I)Landroid/util/Pair;
+ 
+-    move-result-object p2
++    move-result-object v0
++
++    iget-object v0, v0, Landroid/util/Pair;->second:Ljava/lang/Object;
++
++    check-cast v0, Landroid/view/DisplayCutout;
++
++    :try_end_0
++    .catch Ljava/lang/Throwable; {:try_start_0 .. :try_end_0} :catch_0
++
++    return-object v0
++
++    :catch_0
++    move-exception v0
++
++    invoke-static {p0, p1}, Landroid/view/DisplayCutout;->getDisplayCutoutPath(Landroid/content/res/Resources;Ljava/lang/String;)Ljava/lang/String;
++
++    move-result-object v0
++
++    const/4 v1, 0x0
++
++    sget v2, Landroid/util/DisplayMetrics;->DENSITY_DEVICE_STABLE:I
++
++    int-to-float v2, v2
++
++    const/high16 v3, 0x43200000    # 160.0f
++
++    div-float v6, v2, v3
++
++    invoke-static {p0, p1}, Landroid/view/DisplayCutout;->getWaterfallInsets(Landroid/content/res/Resources;Ljava/lang/String;)Landroid/graphics/Insets;
++
++    move-result-object v7
++
++    invoke-static {p0, p1}, Landroid/view/DisplayCutout;->getDisplayCutoutSideOverrides(Landroid/content/res/Resources;Ljava/lang/String;)[I
++
++    move-result-object v8
++
++    move v2, p2
++
++    move v3, p3
++
++    move v4, p4
++
++    move v5, p5
++
++    invoke-static/range {v0 .. v8}, Landroid/view/DisplayCutout;->pathAndDisplayCutoutFromSpec(Ljava/lang/String;Ljava/lang/String;IIIIFLandroid/graphics/Insets;[I)Landroid/util/Pair;
++
++    move-result-object v0
+ 
+-    iget-object p2, p2, Landroid/util/Pair;->second:Ljava/lang/Object;
++    iget-object v0, v0, Landroid/util/Pair;->second:Ljava/lang/Object;
+ 
+-    check-cast p2, Landroid/view/DisplayCutout;
++    check-cast v0, Landroid/view/DisplayCutout;
+ 
+-    return-object p2
++    return-object v0
+ .end method
+ 
+ .method public static blacklist fromSpec(Ljava/lang/String;IIFLandroid/graphics/Insets;[I)Landroid/view/DisplayCutout;

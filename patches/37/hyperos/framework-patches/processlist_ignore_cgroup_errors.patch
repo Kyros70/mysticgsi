@@ -1,0 +1,17 @@
+--- smali/com/android/server/am/ProcessList.smali
++++ smali/com/android/server/am/ProcessList.smali
+@@ -7135,11 +7135,11 @@
+     goto :goto_e
+ 
+     :cond_16
+-    new-instance v0, Ljava/lang/AssertionError;
++    const-string v7, "ActivityManager"
+ 
+-    invoke-direct {v0, v6}, Ljava/lang/AssertionError;-><init>(Ljava/lang/Object;)V
++    invoke-static {v7, v6}, Landroid/util/Slog;->e(Ljava/lang/String;Ljava/lang/String;)I
+ 
+-    throw v0
++    goto :goto_e
+ 
+     :cond_17
+     const/4 v8, 0x1

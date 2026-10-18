@@ -1,0 +1,18 @@
+--- smali_classes2/com/android/server/display/DisplayPowerProximityStateController.smali
++++ smali_classes2/com/android/server/display/DisplayPowerProximityStateController.smali
+@@ -509,6 +509,15 @@
+ 
+     move-result v0
+ 
++    invoke-static {v0}, Ljava/lang/Float;->isNaN(F)Z
++
++    move-result v2
++
++    if-eqz v2, :m5a_not_nan
++
++    move v0, v1
++
++    :m5a_not_nan
+     iput v0, p0, Lcom/android/server/display/DisplayPowerProximityStateController;->mProximityThreshold:F
+ 
+     :cond_1

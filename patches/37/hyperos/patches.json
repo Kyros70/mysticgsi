@@ -2,7 +2,14 @@
     "system": {
         "system/framework/services.jar": [
             "hint_manager_null_supportinfo",
-            "watchdog_hidl_nosuchelement"
+            "watchdog_hidl_nosuchelement",
+            "display_config_fallback",
+            "processlist_ignore_cgroup_errors",
+            "proximity_nan_threshold"
+        ],
+        "system/framework/framework.jar": [
+            "displaycutout_catch_broken_approx",
+            "environment_empty_env"
         ]
     }
 }

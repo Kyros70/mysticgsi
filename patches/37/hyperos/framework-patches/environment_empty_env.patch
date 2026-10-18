@@ -1,0 +1,20 @@
+--- smali_classes3/android/os/Environment.smali
++++ smali_classes3/android/os/Environment.smali
+@@ -1781,6 +1781,17 @@
+ 
+     move-result-object v0
+ 
++    if-eqz v0, :m5a_ret
++
++    invoke-virtual {v0}, Ljava/lang/String;->isEmpty()Z
++
++    move-result p0
++
++    if-eqz p0, :m5a_ret
++
++    const/4 v0, 0x0
++
++    :m5a_ret
+     return-object v0
+ .end method
+ 
