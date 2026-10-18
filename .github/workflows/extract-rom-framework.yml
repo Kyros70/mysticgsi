@@ -74,10 +74,10 @@ jobs:
             *pixeldrain.com*)
               PD_ID=$(echo "$URL" | grep -oP 'pixeldrain\.com/u/\K[A-Za-z0-9]+' || true)
               [ -n "$PD_ID" ] && URL="https://pixeldrain.com/api/file/${PD_ID}?download"
-              aria2c -d dl -o firmware.bin -x4 -s4 "$URL"
+              aria2c -d dl -o firmware.bin -x16 -s16 -k1M --file-allocation=none "$URL"
               ;;
             *)
-              aria2c -d dl -o firmware.bin -x4 -s4 "$URL"
+              aria2c -d dl -o firmware.bin -x16 -s16 -k1M --file-allocation=none "$URL"
               ;;
           esac
           find dl -maxdepth 1 -type f -exec ls -lh {} \;
