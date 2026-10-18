@@ -16,3 +16,9 @@ ro.debuggable=1
 
 # Some devices have sdcardfs kernel panicing on 8.0, Disable for everyone for the moment
 ro.sys.sdcardfs=0
+# lmkd: safe defaults for older vendor/kernels (gsi-patches personal/0012)
+ro.lmk.critical_upgrade=false
+ro.lmk.kill_heaviest_task=true
+
+# keep synthetic vsync alive if HWC has no hw vsync at power-on (gsi-patches personal/0021)
+debug.sf.no_vsyncs_on_screen_off=false

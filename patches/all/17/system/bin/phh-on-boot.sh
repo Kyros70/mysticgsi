@@ -1,5 +1,30 @@
 #!/system/bin/sh
 
+# Disable restricted networking mode on devices without working BPF.
+# Android 14+ uses BPF firewall chains to enforce restricted_networking_mode.
+# On older kernels where BPF maps failed to load, the restricted chain cannot
+# maintain its allowlist, causing all apps to lose network connectivity.
+# The uid_owner_map is the BPF map backing firewall chain rules -- if it does
+# not exist, the restricted chain cannot function and must be disabled.
+if [ ! -e /sys/fs/bpf/netd_shared/map_netd_uid_owner_map ]; then
+    settings put global restricted_networking_mode 0
+    log -t phh-on-boot "Disabled restricted_networking_mode (BPF uid_owner_map absent)"
+fi
+
+# Disable FUSE BPF on devices whose kernels lack fuse-bpf support.
+# Android 16 enables FUSE BPF by default, which requires kernel support for
+# the fuse-bpf program type. On older kernels (< 5.4 without backport),
+# fuseMedia.bpf fails to load and the FuseDaemon falls back to legacy mode
+# but the legacy FUSE path may not work correctly on QPR2+. Setting
+# persist.sys.fuse.bpf.override=false tells the FuseDaemon and vold to
+# use the legacy FUSE path from the start, avoiding the failed BPF load
+# and ensuring bind-mounts for Android/data and Android/obb are set up
+# correctly by vold.
+if [ ! -f /sys/fs/fuse/features/fuse_bpf ]; then
+    setprop persist.sys.fuse.bpf.override false
+    log -t phh-on-boot "Disabled FUSE BPF (kernel fuse_bpf feature absent)"
+fi
+
 vndk="$(getprop persist.sys.vndk)"
 [ -z "$vndk" ] && vndk="$(getprop ro.vndk.version |grep -oE '^[0-9]+')"
 
@@ -33,6 +58,42 @@ if find /sys/firmware -name support_fod |grep -qE .;then
 fi
 
 setprop ctl.stop storageproxyd
+
+# zram swap fallback. the GSI itself does not set up zram -- AOSP's init.rc only
+# chowns /sys/block/zram0/{idle,writeback}, expecting the vendor to mkswap +
+# swapon. on devices whose vendor doesn't configure swap, low-RAM foreground
+# workloads (PDF/WebView renderers in isolated processes, which carry
+# oom_score_adj ~1000) get OOM-reaped at the slightest memory pressure,
+# producing blurry or failed renders (#92 and similar). running this at
+# boot_completed (not during early init) means a vendor that already set up
+# zram is left untouched -- the guard skips when any swap is already active.
+# no-op when the kernel has no zram support (/sys/block/zram0 absent) or no
+# RAM read is available. zram is compressed swap in RAM; disksize is half of
+# MemTotal, lz4 when the kernel exposes it (else the zram default, usually
+# lzo). once zram is active, raise swappiness so the kernel actually swaps
+# cold anon pages to it (zram is fast/in-RAM, so high swappiness is a net
+# win) and lower the dirty ratios so less RAM is held by dirty pages -- both
+# only when the fallback activates, so devices with vendor zram (or no zram)
+# keep their default vm sysctls. this runs in the phhsu_daemon domain, which
+# already holds rw_file_perms on dev_type:blk_file (ram_device) and
+# rwx_file_perms on sysfs_type:file (sysfs_zram) + proc_type writes +
+# capability sys_admin, so no sepolicy companion is needed.
+if [ -e /sys/block/zram0 ] && ! grep -qE '^/' /proc/swaps 2>/dev/null; then
+    echo 1 > /sys/block/zram0/reset 2>/dev/null || true
+    if grep -qw lz4 /sys/block/zram0/comp_algorithm 2>/dev/null; then
+        echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+    fi
+    memtotal_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+    if [ -n "$memtotal_kb" ]; then
+        echo $((memtotal_kb * 1024 / 2)) > /sys/block/zram0/disksize 2>/dev/null || true
+        mkswap /dev/block/zram0 >/dev/null 2>&1 || true
+        swapon /dev/block/zram0 2>/dev/null || true
+        echo 100 > /proc/sys/vm/swappiness 2>/dev/null || true
+        echo 10 > /proc/sys/vm/dirty_ratio 2>/dev/null || true
+        echo 5 > /proc/sys/vm/dirty_background_ratio 2>/dev/null || true
+        log -t phh-on-boot "zram swap fallback active (swappiness=100, disksize ~half of RAM)"
+    fi
+fi
 
 sleep 10
 

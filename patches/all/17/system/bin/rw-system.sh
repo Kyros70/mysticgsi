@@ -54,6 +54,8 @@ fi
 
 vndk="$(getprop persist.sys.vndk)"
 [ -z "$vndk" ] && vndk="$(getprop ro.vndk.version |grep -oE '^[0-9]+')"
+[ -z "$vndk" ] && vndk="$(grep -m1 "^ro\.vndk\.version=" /vendor/build.prop 2>/dev/null | cut -d= -f2 | grep -oE "^[0-9]+")"
+[ -z "$vndk" ] && vndk="$(grep -m1 "^ro\.vendor\.build\.version\.sdk=" /vendor/build.prop 2>/dev/null | cut -d= -f2 | grep -oE "^[0-9]+")"
 
 setprop sys.usb.ffs.aio_compat true
 
@@ -489,7 +491,7 @@ fi
 if [ "$(getprop ro.vendor.product.manufacturer)" = "motorola" ] || [ "$(getprop ro.product.vendor.manufacturer)" = "motorola" ]; then
     if getprop ro.vendor.product.device | grep -q -e nora -e ali -e hannah -e evert -e jeter -e deen -e james -e pettyl -e jater; then
         setprop  ro.audio.ignore_effects true
-        if [ "$vndk" -ge 28 ]; then
+        if [ -n "$vndk" ] && [ "$vndk" -ge 28 ]; then
             f="/vendor/lib/libeffects.so"
             # shellcheck disable=SC2010
             ctxt="$(ls -lZ $f | grep -oE 'u:object_r:[^:]*:s0')"
@@ -557,7 +559,7 @@ if grep -qF 'PowerVR Rogue GE8100' /vendor/lib/egl/GLESv1_CM_mtk.so ||
 fi
 
 #If we have both Samsung and AOSP power hal, take Samsung's
-if [ -f /vendor/bin/hw/vendor.samsung.hardware.miscpower@1.0-service ] && [ "$vndk" -lt 28 ]; then
+if [ -f /vendor/bin/hw/vendor.samsung.hardware.miscpower@1.0-service ] && [ -n "$vndk" ] && [ "$vndk" -lt 28 ]; then
     mount -o bind /system/phh/empty /vendor/bin/hw/android.hardware.power@1.0-service
 fi
 
@@ -612,7 +614,7 @@ if getprop ro.vendor.build.fingerprint | grep -iq -E -e 'huawei|honor' || getpro
     mount -o bind /system/phh/libnfc-nci-huawei.conf /system/etc/libnfc-nci.conf
 fi
 
-if getprop ro.vendor.build.fingerprint | grep -qE -e ".*(crown|star)[q2]*lte.*" -e ".*(SC-0[23]K|SCV3[89]).*" && [ "$vndk" -lt 28 ]; then
+if getprop ro.vendor.build.fingerprint | grep -qE -e ".*(crown|star)[q2]*lte.*" -e ".*(SC-0[23]K|SCV3[89]).*" && [ -n "$vndk" ] && [ "$vndk" -lt 28 ]; then
     for f in /vendor/lib/libfloatingfeature.so /vendor/lib64/libfloatingfeature.so; do
         [ ! -f "$f" ] && continue
         # shellcheck disable=SC2010
@@ -643,7 +645,7 @@ if getprop ro.vendor.build.fingerprint | grep -qiE '^samsung'; then
     fi
 
     if getprop ro.hardware | grep -q -e samsungexynos7870 -e qcom; then
-        if [ "$vndk" -le 27 ]; then
+        if [ -n "$vndk" ] && [ "$vndk" -le 27 ]; then
             setprop persist.sys.phh.sdk_override /vendor/bin/hw/rild=27
         fi
     fi
@@ -686,7 +688,7 @@ if [ -n "$(getprop ro.boot.product.hardware.sku)" ] && [ -z "$(getprop ro.hw.oem
 	setprop ro.hw.oemName "$(getprop ro.boot.product.hardware.sku)"
 fi
 
-if getprop ro.vendor.build.fingerprint | grep -qiE '^samsung/' && [ "$vndk" -ge 28 ];then
+if getprop ro.vendor.build.fingerprint | grep -qiE '^samsung/' && [ -n "$vndk" ] && [ "$vndk" -ge 28 ];then
 	setprop persist.sys.phh.samsung_fingerprint 0
 	#obviously broken perms
 	if [ "$(stat -c '%U' /sys/class/sec/tsp/cmd)" == "root" ] &&
@@ -864,7 +866,7 @@ if [ -e /dev/sprd-adf-dev ];then
 fi
 
 # Fix sensor services crashing on SPRD devices with Pie vendor
-if getprop ro.hardware.keystore | grep -iq sprd && [ "$vndk" -le 28 ]; then
+if getprop ro.hardware.keystore | grep -iq sprd && [ -n "$vndk" ] && [ "$vndk" -le 28 ]; then
     setprop persist.sys.phh.disable_sensor_direct_report true
 fi
 
@@ -907,7 +909,7 @@ if getprop ro.build.overlay.deviceid |grep -qE '^RMX';then
     fi
 fi
 
-if [ "$vndk" -le 28 ] && getprop ro.hardware |grep -q -e mt6761 -e mt6763 -e mt6765 -e mt6785 -e mt8768 -e mt6779 -e mt6771 -e mt8766;then
+if [ -n "$vndk" ] && [ "$vndk" -le 28 ] && getprop ro.hardware |grep -q -e mt6761 -e mt6763 -e mt6765 -e mt6785 -e mt8768 -e mt6779 -e mt6771 -e mt8766;then
     setprop debug.stagefright.ccodec 0
 fi
 
@@ -1026,12 +1028,12 @@ fi
 resetprop_phh ro.control_privapp_permissions log
 
 if [ -f /vendor/etc/init/vendor.ozoaudio.media.c2@1.0-service.rc ];then
-    if [ "$vndk" -le 29 ]; then
+    if [ -n "$vndk" ] && [ "$vndk" -le 29 ]; then
         mount /system/etc/seccomp_policy/mediacodec.policy /vendor/etc/seccomp_policy/codec2.vendor.base.policy
     fi
 fi
 
-if [ "$vndk" -le 27 ];then
+if [ -n "$vndk" ] && [ "$vndk" -le 27 ];then
     setprop persist.sys.phh.no_present_or_validate true
 fi
 
@@ -1041,11 +1043,11 @@ for f in $(find /sys -name fts_gesture_mode);do
     setprop persist.sys.phh.focaltech_node "$f"
 done
 
-if [ "$vndk" -le 27 ] && [ -f /vendor/bin/mnld ];then
+if [ -n "$vndk" ] && [ "$vndk" -le 27 ] && [ -f /vendor/bin/mnld ];then
     setprop persist.sys.phh.sdk_override /vendor/bin/mnld=26
 fi
 
-if [ "$vndk" -le 30 ];then
+if [ -n "$vndk" ] && [ "$vndk" -le 30 ];then
 	# On older vendor the default behavior was to disable color management
 	# Don't override vendor value, merely add a fallback
 	setprop ro.surface_flinger.use_color_management false
