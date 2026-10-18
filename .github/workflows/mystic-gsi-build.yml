@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: namespace-profile-kyros
     timeout-minutes: 350
     steps:
       - name: Free up disk space
