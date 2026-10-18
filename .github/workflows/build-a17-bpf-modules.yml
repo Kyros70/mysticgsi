@@ -32,7 +32,7 @@ on:
         default: ''
       lunch_target:
         description: 'lunch target (check ayaka.sh)'
-        default: 'treble_arm64_bvN-trunk_staging-userdebug'
+        default: 'treble_arm64_bvN-cp2a-userdebug'
       modules:
         description: 'Modules to build'
         default: 'com.android.tethering apexd netd'
