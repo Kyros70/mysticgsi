@@ -1,4 +1,5 @@
 name: Extract ROM Framework
+run-name: Extract ${{ github.event.inputs.name }}
 
 # Downloads a firmware (OTA zip with payload.bin), unpacks system/system_ext/product/mi_ext
 # and pushes the framework jars + build props + selinux/init/vintf files to a PRIVATE repo
@@ -45,9 +46,9 @@ jobs:
 
       - name: Install payload-dumper-go
         run: |
-          api=$(curl -fsSL https://api.github.com/repos/ssut/payload-dumper-go/releases/latest)
+          api=$(curl -fsSL --retry 3 -H "Authorization: Bearer ${{ github.token }}" https://api.github.com/repos/ssut/payload-dumper-go/releases/latest)
           dl=$(echo "$api" | grep -oP '"browser_download_url": "\K[^"]*linux_amd64\.tar\.gz')
-          curl -fL -o pdg.tgz "$dl"
+          curl -fL --retry 3 -o pdg.tgz "$dl"
           mkdir -p pdg && tar -xzf pdg.tgz -C pdg
           find pdg -type f -name payload-dumper-go -exec cp {} ./payload-dumper-go \;
           chmod +x payload-dumper-go
