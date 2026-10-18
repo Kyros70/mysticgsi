@@ -267,6 +267,11 @@ phase_product() {
 
 load_env() {
   cd "$TREE" || die "cd $TREE"
+  # device/phh/treble/gsi_stubs defines the same AVF modules, keep the stubs and drop the real tree
+  if [[ -d $TREE/packages/modules/Virtualization ]]; then
+    info "removing packages/modules/Virtualization (gsi_stubs provides these modules)"
+    rm -rf "$TREE/packages/modules/Virtualization"
+  fi
   export WITH_GMS=false AYAKA_MAINTAINER=Kyros70 IS_OFFICIAL=false
   export LC_ALL=C
   if command -v ccache >/dev/null; then export USE_CCACHE=1 CCACHE_EXEC=$(command -v ccache); fi

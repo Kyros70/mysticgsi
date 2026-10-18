@@ -50,7 +50,13 @@ jobs:
         run: |
           export PATH="$HOME/bin:$PATH"
           export W="$HOME/work"
-          bash scripts/build-a17-modules.sh
+          set -o pipefail
+          # stream the output and, if the build reports an error, attach its last 80 lines as one annotation
+          bash scripts/build-a17-modules.sh 2>&1 | awk '
+            { print; fflush(); l=$0; gsub(/\r/,"",l); gsub(/\033\[[0-9;]*m/,"",l); buf[NR%80]=l
+              if (l ~ /error:|ERROR:|FAILED|Build Failure|failed to build/) bad=1 }
+            END { if (bad) { s=""; for (i=NR-79;i<=NR;i++) if (i>0) { x=buf[i%80]; gsub(/%/,"%25",x); s=s x "%0A" }
+                  print "::error title=build output (last 80 lines)::" s } }'
           echo "ARCHIVE=$W/a17-bpf-modules.tar.gz" >> "$GITHUB_ENV"
 
       - name: Publish release
