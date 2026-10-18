@@ -231,6 +231,10 @@ PY_EOF
   grep -n 'product_charger_res_images' "$phh/base.mk" && bad "product_charger_res_images still referenced" || ok "no phh charger module left"
   if grep -n -i 'restless\|bootanimation.zip' "$phh/base.mk" "$phh/phh.mk"; then bad "RestlessOS references still in base.mk/phh.mk"; else ok "no RestlessOS wallpaper/bootanimation references left"; fi
 
+  step "device/phh/treble: drop extra VNDK 28/29 (A17 tree has no prebuilts/vndk/v28, v29)"
+  sed -i '/^PRODUCT_EXTRA_VNDK_VERSIONS += 28 29$/d' "$phh/base.mk"
+  if grep -n 'PRODUCT_EXTRA_VNDK_VERSIONS' "$phh/base.mk"; then bad "PRODUCT_EXTRA_VNDK_VERSIONS still in base.mk"; else ok "no extra VNDK versions left in base.mk"; fi
+
   step "device/phh/treble: ayaka.mk (AyakaUI flags + vendor/custom inherit)"
   cat >"$phh/ayaka.mk" <<'AYAKA_MK_EOF'
 # AyakaUI GSI product
