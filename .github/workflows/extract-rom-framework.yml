@@ -88,7 +88,7 @@ jobs:
           F=$(find dl -maxdepth 1 -type f | head -n1)
           mkdir -p fw
           case "$(file -b "$F")" in
-            *Zip*|*ZIP*) unzip -o "$F" payload.bin -d fw || unzip -o "$F" -d fw ;;
+            *Zip*|*ZIP*|*Java\ archive*|*JAR*) unzip -o "$F" payload.bin -d fw || unzip -o "$F" -d fw ;;
             *7-zip*)     7z x "$F" -ofw ;;
             *)           cp "$F" fw/payload.bin ;;
           esac
