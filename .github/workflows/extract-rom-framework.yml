@@ -136,6 +136,13 @@ jobs:
           find . -maxdepth 4 -type f \( -name build.prop -o -name 'default.prop' \) -print0 | xargs -0 -r cp --parents -t ../out
           find . -type f \( -path '*/etc/selinux/*' -o -path '*/etc/vintf/*' -o -path '*/etc/init/*.rc' \) \
               -size -20M -print0 | xargs -0 -r cp --parents -t ../out
+          # apexd / bpf / netd / init binaries and the apex list (for the BPF + apexd port)
+          find . -type f \( -path '*/bin/apexd' -o -path '*/bin/netd' -o -path '*/bin/init' \
+              -o -name 'hyper_bpfloader' -o -name 'dynbpfloader' -o -name 'netbpfload' \) -print0 \
+              | xargs -0 -r cp --parents -t ../out
+          find . -type f \( -name '*.apex' -o -name '*.capex' \) -printf '%s %p\n' | sort -k2 > ../out/apex-list.txt
+          find . -type f \( -name '*tethering*.apex' -o -name '*tethering*.capex' \) -print0 \
+              | xargs -0 -r cp --parents -t ../out
           cd ..
           # GitHub rejects files > 100 MB
           find out -type f -size +95M -print -delete | sed 's/^/dropped (too large): /'
