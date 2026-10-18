@@ -1,0 +1,166 @@
+name: Extract ROM Framework
+
+# Downloads a firmware (OTA zip with payload.bin), unpacks system/system_ext/product/mi_ext
+# and pushes the framework jars + build props + selinux/init/vintf files to a PRIVATE repo
+# branch, so they can be cloned and decoded elsewhere.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Branch name suffix (pushed as rom/<name>)'
+        required: true
+        default: 'hyperos4'
+      firmware_url:
+        description: 'Firmware URL (OTA zip with payload.bin; Google Drive, Mega, Pixeldrain or direct)'
+        required: true
+        default: ''
+      target_repo:
+        description: 'PRIVATE repo to push to (owner/name)'
+        required: true
+        default: 'Kyros70/rom-dump'
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      NAME: ${{ github.event.inputs.name }}
+      URL: ${{ github.event.inputs.firmware_url }}
+      TARGET: ${{ github.event.inputs.target_repo }}
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y aria2 erofs-utils p7zip-full unzip file curl python3-venv
+
+      - name: Install payload-dumper-go
+        run: |
+          api=$(curl -fsSL https://api.github.com/repos/ssut/payload-dumper-go/releases/latest)
+          dl=$(echo "$api" | grep -oP '"browser_download_url": "\K[^"]*linux_amd64\.tar\.gz')
+          curl -fL -o pdg.tgz "$dl"
+          mkdir -p pdg && tar -xzf pdg.tgz -C pdg
+          find pdg -type f -name payload-dumper-go -exec cp {} ./payload-dumper-go \;
+          chmod +x payload-dumper-go
+          ./payload-dumper-go -h 2>&1 | head -3 || true
+
+      - name: Download firmware
+        run: |
+          mkdir -p dl
+          case "$URL" in
+            *drive.google.com*)
+              python3 -m venv .venv && .venv/bin/pip install -q gdown
+              mkdir -p ~/.cache/gdown
+              [ -n "${{ secrets.GDRIVE_COOKIES }}" ] && echo "${{ secrets.GDRIVE_COOKIES }}" > ~/.cache/gdown/cookies.txt
+              .venv/bin/python -m gdown "$URL" -O dl/firmware.bin
+              ;;
+            *mega.nz*|*mega.co.nz*)
+              sudo apt-get install -y megatools
+              if [ -n "${{ secrets.MEGA_EMAIL }}" ] && [ -n "${{ secrets.MEGA_PASSWORD }}" ]; then
+                printf '[Login]\nUsername = %s\nPassword = %s\n' \
+                  "${{ secrets.MEGA_EMAIL }}" "${{ secrets.MEGA_PASSWORD }}" > ~/.megarc
+              fi
+              megadl --path dl "$URL"
+              ;;
+            *pixeldrain.com*)
+              PD_ID=$(echo "$URL" | grep -oP 'pixeldrain\.com/u/\K[A-Za-z0-9]+' || true)
+              [ -n "$PD_ID" ] && URL="https://pixeldrain.com/api/file/${PD_ID}?download"
+              aria2c -d dl -o firmware.bin -x4 -s4 "$URL"
+              ;;
+            *)
+              aria2c -d dl -o firmware.bin -x4 -s4 "$URL"
+              ;;
+          esac
+          find dl -maxdepth 1 -type f -exec ls -lh {} \;
+
+      - name: Locate payload.bin
+        run: |
+          F=$(find dl -maxdepth 1 -type f | head -n1)
+          mkdir -p fw
+          case "$(file -b "$F")" in
+            *Zip*|*ZIP*) unzip -o "$F" payload.bin -d fw || unzip -o "$F" -d fw ;;
+            *7-zip*)     7z x "$F" -ofw ;;
+            *)           cp "$F" fw/payload.bin ;;
+          esac
+          PAYLOAD=$(find fw -type f -iname payload.bin | head -n1)
+          [ -z "$PAYLOAD" ] && { echo "No payload.bin found - this workflow only handles payload OTAs"; find fw -type f | head -50; exit 1; }
+          echo "PAYLOAD=$PAYLOAD" >> "$GITHUB_ENV"
+
+      - name: Dump partitions
+        run: |
+          mkdir -p img
+          for p in system system_ext product mi_ext; do
+            ./payload-dumper-go -p "$p" -o img "$PAYLOAD" || echo "partition $p not present, skipping"
+          done
+          find img -type f -exec ls -lh {} \;
+          rm -rf dl fw
+
+      - name: Unpack partitions
+        run: |
+          mkdir -p rom mnt
+          for p in system system_ext product mi_ext; do
+            f=$(find img -type f -name "$p.img" | head -n1)
+            [ -z "$f" ] && continue
+            mkdir -p "rom/$p"
+            if fsck.erofs --extract="rom/$p" "$f" >/dev/null 2>&1; then
+              echo "$p: erofs"
+            else
+              echo "$p: trying loop mount (ext4)"
+              sudo mount -o loop,ro "$f" mnt
+              sudo cp -a mnt/. "rom/$p/"
+              sudo umount mnt
+              sudo chown -R "$USER" "rom/$p"
+            fi
+            rm -f "$f"
+          done
+          du -sh rom/* || true
+
+      - name: Collect framework files
+        run: |
+          mkdir -p out
+          cd rom
+          find . -type f \( -name framework.jar -o -name services.jar -o -name ext.jar \
+              -o -name telephony-common.jar -o -name framework-res.apk \
+              -o -name 'miui-*.jar' -o -name 'miui*framework*.jar' -o -name 'miui*services*.jar' \) \
+              -path '*framework*' -print0 | xargs -0 -r cp --parents -t ../out
+          find . -maxdepth 4 -type f \( -name build.prop -o -name 'default.prop' \) -print0 | xargs -0 -r cp --parents -t ../out
+          find . -type f \( -path '*/etc/selinux/*' -o -path '*/etc/vintf/*' -o -path '*/etc/init/*.rc' \) \
+              -size -20M -print0 | xargs -0 -r cp --parents -t ../out
+          cd ..
+          # GitHub rejects files > 100 MB
+          find out -type f -size +95M -print -delete | sed 's/^/dropped (too large): /'
+          du -sh out; find out -name '*.jar' -o -name '*.apk' | xargs -r ls -lh
+
+      - name: Upload as artifact (fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rom-${{ github.event.inputs.name }}
+          path: out
+          retention-days: 7
+
+      - name: Push to private repo
+        env:
+          ROM_REPO_TOKEN: ${{ secrets.ROM_REPO_TOKEN }}
+        run: |
+          if [ -z "$ROM_REPO_TOKEN" ]; then
+            echo "Secret ROM_REPO_TOKEN is not set - skipping push (artifact was uploaded)."
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${ROM_REPO_TOKEN}@github.com/${TARGET}.git" target
+          cd target
+          git checkout -B "rom/${NAME}"
+          git rm -rq . 2>/dev/null || true
+          cp -a ../out/. .
+          git add -A
+          git -c user.name="rom-extract" -c user.email="rom-extract@users.noreply.github.com" \
+              commit -qm "ROM dump: ${NAME}" || { echo "nothing to commit"; exit 0; }
+          git push -f origin "rom/${NAME}"
