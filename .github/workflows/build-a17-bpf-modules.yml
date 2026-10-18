@@ -1,0 +1,156 @@
+name: Build A17 BPF/apex modules
+
+# Builds com.android.tethering (netbpfload + BPF progs + connectivity jars), apexd and netd
+# from the AyakaUI A17 tree with the gsi-patches applied (only the repos listed in `repos`),
+# then publishes them as a GitHub release so they can be dropped into patches/37/hyperos.
+
+run-name: Build A17 BPF modules (${{ github.event.inputs.patches_branch }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_url:
+        description: 'Manifest repo'
+        default: 'https://github.com/AyakaUI/android_manifest'
+      manifest_branch:
+        description: 'Manifest branch'
+        default: 'seventeen'
+      patches_branch:
+        description: 'Branch of Kyros70/gsi-patches (also used as the ROM tier name)'
+        default: 'pixelos'
+      repos:
+        description: 'Repo paths to patch (space separated)'
+        default: 'system/apex system/bpf system/netd packages/modules/Connectivity'
+      treble_url:
+        description: 'device/phh/treble source, cloned only if the manifest does not provide it'
+        default: 'https://github.com/cawilliamson/device_phh_treble'
+      treble_branch:
+        description: 'device/phh/treble branch (empty = default branch)'
+        default: ''
+      setup_cmd:
+        description: 'Command run in the tree root after envsetup, before lunch (e.g. the generate step from ayaka.sh)'
+        default: ''
+      lunch_target:
+        description: 'lunch target (check ayaka.sh)'
+        default: 'treble_arm64_bvN-trunk_staging-userdebug'
+      modules:
+        description: 'Modules to build'
+        default: 'com.android.tethering apexd netd'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: namespace-profile-kyros
+    timeout-minutes: 720
+    env:
+      MANIFEST_URL: ${{ github.event.inputs.manifest_url }}
+      MANIFEST_BRANCH: ${{ github.event.inputs.manifest_branch }}
+      PATCHES_BRANCH: ${{ github.event.inputs.patches_branch }}
+      REPOS: ${{ github.event.inputs.repos }}
+      TREBLE_URL: ${{ github.event.inputs.treble_url }}
+      TREBLE_BRANCH: ${{ github.event.inputs.treble_branch }}
+      SETUP_CMD: ${{ github.event.inputs.setup_cmd }}
+      LUNCH: ${{ github.event.inputs.lunch_target }}
+      MODULES: ${{ github.event.inputs.modules }}
+      PATCHES_TOKEN: ${{ secrets.ROM_REPO_TOKEN }}
+    steps:
+      - name: Disk and CPU
+        run: |
+          df -h / /home 2>/dev/null || true
+          nproc; free -g | head -2
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git gnupg flex bison build-essential zip curl zlib1g-dev \
+            libc6-dev-i386 libncurses-dev x11proto-core-dev libx11-dev libgl1-mesa-dev \
+            libxml2-utils xsltproc unzip fontconfig python3 rsync bc lz4 libssl-dev ccache
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          git config --global user.name "a17-bpf-build"
+          git config --global user.email "a17-bpf-build@users.noreply.github.com"
+          git config --global color.ui false
+
+      - name: Sync source
+        run: |
+          export PATH="$HOME/bin:$PATH"
+          mkdir -p "$HOME/src" && cd "$HOME/src"
+          repo init --depth=1 -u "$MANIFEST_URL" -b "$MANIFEST_BRANCH"
+          repo sync -c -j"$(nproc)" --no-tags --no-clone-bundle --force-sync
+          if [ ! -d device/phh/treble ]; then
+            mkdir -p device/phh
+            if [ -n "$TREBLE_BRANCH" ]; then
+              git clone --depth=1 -b "$TREBLE_BRANCH" "$TREBLE_URL" device/phh/treble
+            else
+              git clone --depth=1 "$TREBLE_URL" device/phh/treble
+            fi
+          fi
+
+      - name: Apply gsi-patches (scoped to the listed repos)
+        run: |
+          export PATH="$HOME/bin:$PATH"
+          cd "$HOME/src"
+          git clone --depth=1 -b "$PATCHES_BRANCH" \
+            "https://x-access-token:${PATCHES_TOKEN}@github.com/Kyros70/gsi-patches.git" "$HOME/gsi-patches"
+          python3 - <<'PY'
+          import os, subprocess, sys, glob
+          root = os.path.expanduser("~/src")
+          pdir = os.path.expanduser("~/gsi-patches/patches")
+          repos = os.environ["REPOS"].split()
+          tiers = [t for t in ["trebledroid", "personal", "release-builds", "rom", os.environ["PATCHES_BRANCH"]]
+                   if os.path.isdir(os.path.join(pdir, t))]
+          print("tiers:", tiers)
+          failed = []
+          for path in repos:
+              name = "platform_" + path.replace("/", "_")
+              repo_dir = os.path.join(root, path)
+              if not os.path.isdir(repo_dir):
+                  print(f"!! {path} missing in tree"); failed.append(path); continue
+              for tier in tiers:
+                  d = os.path.join(pdir, tier, name)
+                  for patch in sorted(glob.glob(os.path.join(d, "*.patch"))):
+                      r = subprocess.run(["git", "-C", repo_dir, "am", "--3way", patch],
+                                         capture_output=True, text=True)
+                      tag = f"{tier}/{name}/{os.path.basename(patch)[:48]}"
+                      if r.returncode == 0:
+                          print("OK  ", tag)
+                      else:
+                          print("FAIL", tag); print(r.stdout[-600:], r.stderr[-600:])
+                          subprocess.run(["git", "-C", repo_dir, "am", "--abort"], capture_output=True)
+                          failed.append(tag)
+          print("\nFAILED:", failed if failed else "none")
+          sys.exit(1 if failed else 0)
+          PY
+
+      - name: Build modules
+        run: |
+          cd "$HOME/src"
+          set +e
+          source build/envsetup.sh
+          set -e
+          if [ -n "$SETUP_CMD" ]; then bash -c "$SETUP_CMD"; fi
+          lunch "$LUNCH"
+          export USE_CCACHE=1 CCACHE_EXEC=/usr/bin/ccache
+          m -j"$(nproc)" $MODULES
+          echo "ANDROID_PRODUCT_OUT=$ANDROID_PRODUCT_OUT" >> "$GITHUB_ENV"
+
+      - name: Collect outputs
+        run: |
+          mkdir -p "$HOME/dist/system/bin" "$HOME/dist/system/apex"
+          cp "$ANDROID_PRODUCT_OUT/system/bin/apexd" "$ANDROID_PRODUCT_OUT/system/bin/netd" "$HOME/dist/system/bin/"
+          find "$ANDROID_PRODUCT_OUT/system/apex" -maxdepth 1 -name 'com.android.tethering*' -exec cp {} "$HOME/dist/system/apex/" \;
+          find "$HOME/dist" -type f -exec ls -lh {} \;
+          cd "$HOME/dist" && tar czf "$HOME/a17-bpf-modules.tar.gz" system && ls -lh "$HOME/a17-bpf-modules.tar.gz"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          type gh >/dev/null 2>&1 || sudo apt-get install -y gh
+          gh release create "a17-bpf-${{ github.run_number }}" "$HOME/a17-bpf-modules.tar.gz" \
+            --repo "${{ github.repository }}" \
+            --title "A17 BPF/apex modules #${{ github.run_number }}" \
+            --notes "manifest=$MANIFEST_BRANCH patches=$PATCHES_BRANCH lunch=$LUNCH modules=$MODULES"
