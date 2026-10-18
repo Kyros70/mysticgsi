@@ -121,7 +121,7 @@ jobs:
 
           mkdir -p firmware_extracted
           case "$MIME" in
-            *Zip*|*ZIP*)
+            *Zip*|*ZIP*|*Java\ archive*|*JAR*)
               unzip -o "$DL_FILE" -d firmware_extracted
               ;;
             *RAR*)
