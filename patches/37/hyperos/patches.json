@@ -1,0 +1,8 @@
+{
+    "system": {
+        "system/framework/services.jar": [
+            "hint_manager_null_supportinfo",
+            "watchdog_hidl_nosuchelement"
+        ]
+    }
+}

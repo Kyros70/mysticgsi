@@ -1,0 +1,10 @@
+--- smali/com/android/server/Watchdog.smali
++++ smali/com/android/server/Watchdog.smali
+@@ -818,6 +818,7 @@
+     invoke-virtual {p0, v4}, Ljava/util/HashSet;->add(Ljava/lang/Object;)Z
+     :try_end_0
+     .catch Landroid/os/RemoteException; {:try_start_0 .. :try_end_0} :catch_0
++    .catch Ljava/util/NoSuchElementException; {:try_start_0 .. :try_end_0} :catch_0
+ 
+     nop
+ 

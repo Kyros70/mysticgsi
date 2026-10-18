@@ -1,0 +1,32 @@
+--- smali_classes3/com/android/server/power/hint/HintManagerService.smali
++++ smali_classes3/com/android/server/power/hint/HintManagerService.smali
+@@ -822,6 +822,29 @@
+     :goto_0
+     iget-object v3, p0, Lcom/android/server/power/hint/HintManagerService;->mSupportInfo:Landroid/hardware/power/SupportInfo;
+ 
++    if-nez v3, :m5a_support_ok
++
++    new-instance v3, Landroid/hardware/power/SupportInfo;
++
++    invoke-direct {v3}, Landroid/hardware/power/SupportInfo;-><init>()V
++
++    new-instance v4, Landroid/hardware/power/SupportInfo$HeadroomSupportInfo;
++
++    invoke-direct {v4}, Landroid/hardware/power/SupportInfo$HeadroomSupportInfo;-><init>()V
++
++    iput-object v4, v3, Landroid/hardware/power/SupportInfo;->headroom:Landroid/hardware/power/SupportInfo$HeadroomSupportInfo;
++
++    new-instance v4, Landroid/hardware/power/SupportInfo$CompositionDataSupportInfo;
++
++    invoke-direct {v4}, Landroid/hardware/power/SupportInfo$CompositionDataSupportInfo;-><init>()V
++
++    iput-object v4, v3, Landroid/hardware/power/SupportInfo;->compositionData:Landroid/hardware/power/SupportInfo$CompositionDataSupportInfo;
++
++    iput-object v3, p0, Lcom/android/server/power/hint/HintManagerService;->mSupportInfo:Landroid/hardware/power/SupportInfo;
++
++    :m5a_support_ok
++    iget-object v3, p0, Lcom/android/server/power/hint/HintManagerService;->mSupportInfo:Landroid/hardware/power/SupportInfo;
++
+     iget-object v3, v3, Landroid/hardware/power/SupportInfo;->headroom:Landroid/hardware/power/SupportInfo$HeadroomSupportInfo;
+ 
+     iget-boolean v3, v3, Landroid/hardware/power/SupportInfo$HeadroomSupportInfo;->isCpuSupported:Z
