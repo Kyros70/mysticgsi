@@ -143,6 +143,13 @@ jobs:
           find . -type f \( -name '*.apex' -o -name '*.capex' \) -printf '%s %p\n' | sort -k2 > ../out/apex-list.txt
           find . -type f \( -name '*tethering*.apex' -o -name '*tethering*.capex' \) -print0 \
               | xargs -0 -r cp --parents -t ../out
+          # broad native set, to compare with the AOSP GSI and swap what is AOSP-pure
+          find ./system/system/bin -type f -size -60M -print0 2>/dev/null | xargs -0 -r cp --parents -t ../out
+          find ./system/system/lib64/bootstrap ./system/system/lib/bootstrap -type f -print0 2>/dev/null | xargs -0 -r cp --parents -t ../out
+          find ./system/system/apex -maxdepth 1 -type f \( -name 'com.android.runtime*' -o -name 'com.android.art*' \) -print0 2>/dev/null | xargs -0 -r cp --parents -t ../out
+          for l in libutils libbinder libandroid_servers libandroid_runtime libprocessgroup libfs_mgr libcutils libbase libc++ liblog libgui libvold libselinux; do
+            find ./system/system/lib64 -maxdepth 1 -type f -name "$l.so" -print0 2>/dev/null | xargs -0 -r cp --parents -t ../out
+          done
           cd ..
           # GitHub rejects files > 100 MB
           find out -type f -size +95M -print -delete | sed 's/^/dropped (too large): /'
