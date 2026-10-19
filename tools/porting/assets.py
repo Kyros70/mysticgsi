@@ -8,6 +8,7 @@ from assets import ensure_extracted, is_packed
 from . import vendors
 from .binary import patch_init
 from .context import PatchContext
+from .epoll import patch_epoll_pwait2
 from .framework import apply_framework_patches
 
 
@@ -127,6 +128,9 @@ def apply_rom_patches(ctx: PatchContext) -> None:
             patch_init(ctx)
     elif ctx.rom_type in ("magicos", "emui", "harmonyos", "pixel"):
         patch_init(ctx)
+
+    # A17 libutils needs epoll_pwait2, which kernels older than 5.11 do not have
+    patch_epoll_pwait2(ctx)
 
     system_prop_file = os.path.join(rom_patches_dir, "system.prop")
     if os.path.exists(system_prop_file):
